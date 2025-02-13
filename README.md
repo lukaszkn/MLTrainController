@@ -6,3 +6,7 @@ As the locomotive moves along the track, the app continuously monitors its locat
 This is just one example of how AI and automation can be used to enhance everyday objects, making them smarter and more interactive! 🚂
 
 [![AI controlled LEGO locomotive shuttle train](https://img.youtube.com/vi/wKznTa8t5AY/0.jpg)](https://www.youtube.com/watch?v=wKznTa8t5AY)
+
+This sample app uses BoostBLEKit from https://github.com/bricklife/BoostBLEKit
+
+LEGO® is a trademark of the LEGO Group of companies which does not sponsor, authorize or endorse this site.
