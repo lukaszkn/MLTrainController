@@ -21,6 +21,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     private var predictionBoxesView: PredictionBoxesView?
     private var hubManager: HubManager!
     private var power: Int8 = 0
+    private var lastMidX = CGFloat.nan
+    private let locoPower: Int8 = 40
+    private var started = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -34,7 +37,13 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        
         setupBoxesView()
+        
+        powerLabel.removeFromSuperview()
+        view.addSubview(powerLabel)
+        button.removeFromSuperview()
+        view.addSubview(button)
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -43,8 +52,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         DispatchQueue.global(qos: .background).async {
             self.captureSession?.startRunning()
         }
-        
-        powerLabel.bringSubviewToFront(powerLabel.superview!)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             self.startConnectingTrain()
@@ -117,20 +124,42 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     private func visionRequestDidComplete(request: VNRequest, error: Error?) {
         if let prediction = (request.results as? [VNRecognizedObjectObservation])?.first {
-            print("\(prediction.boundingBox.midX)")
+            
             DispatchQueue.main.async {
+                self.updateLastLocoPosition(midX: prediction.boundingBox.midX)
                 self.predictionBoxesView?.drawBox(with: [prediction])
             }
         } else {
-//            DispatchQueue.main.async {
-//                self.predictionBoxesView?.layer.sublayers?.removeAll()
-//            }
+            DispatchQueue.main.async {
+                self.predictionBoxesView?.layer.sublayers?.removeAll()
+            }
         }
+    }
+    
+    private func updateLastLocoPosition(midX: CGFloat) {
+        lastMidX = midX
+        var newPower: Int8 = power
+        
+        if power != 0 {
+            if lastMidX > 0.7 {
+                newPower = -locoPower
+            } else if lastMidX < 0.3 {
+                newPower = locoPower
+            }
+        } else if lastMidX > 0.4 && lastMidX < 0.6 {
+            newPower = locoPower
+        }
+            
+        if started && newPower != power {
+            setPower(power: newPower)
+        }
+        
+        powerLabel.text = "\(String(format: "%.2f", lastMidX))  power: \(newPower)"
     }
     
     private func setPower(power: Int8) {
         self.power = power
-        powerLabel.text = "\(power)"
+        print("Power set to: \(power)")
         
         guard let hub = hubManager.connectedHub else { return }
         
@@ -143,13 +172,21 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     }
     
     @IBAction func buttonTapped(_ sender: Any) {
+        if started {
+            started = false
+            setPower(power: 0)
+            button.setTitle("Start", for: .normal)
+        } else {
+            started = true
+            button.setTitle("Stop", for: .normal)
+        }
     }
     
     func startConnectingTrain() {
         if hubManager.isConnectedHub {
             hubManager.disconnect()
         } else {
-            button.titleLabel?.text = "Connecting..."
+            button.setTitle("Connecting...", for: .normal)
             hubManager.startScan()
         }
     }
@@ -158,6 +195,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
 extension ViewController: HubManagerDelegate {
     func didConnect(peripheral: CBPeripheral) {
         print("didConnect \(peripheral.identifier)")
+        button.setTitle("Start", for: .normal)
     }
     
     func didFailToConnect(peripheral: CBPeripheral, error: (any Error)?) {
